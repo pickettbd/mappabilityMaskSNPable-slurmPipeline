@@ -71,12 +71,15 @@ fi
 # load the modules
 module purge
 module load snpable/20091110
+module load perl/5.30.0
+module load perlmodules/5.30.0/File-Rename/1.10
 
 set -o pipefail
 time splitfa  \
 	"${ASM_PATH}" \
 	"${KMER_SIZE}" \
 	| split \
+		-a 8 \
 		-l ${LINES_PER_SPLIT_FASTA_FILE} \
 		--numeric-suffixes=1 \
 		--additional-suffix=".fa" \
@@ -85,6 +88,12 @@ time splitfa  \
 
 EXIT_CODE=$?
 set +o pipefail
+
+if [ $EXIT_CODE -eq 0 ]
+then
+	rename -e 's/(split-)0+/$1/' "${ASM_DIR}/split-"*
+	EXIT_CODE=$?
+fi
 
 exit ${EXIT_CODE}
 
