@@ -1,0 +1,91 @@
+#! /bin/bash
+
+# Ensure we're running from the correct location
+CWD_check()
+{
+	#local SCRIPTS_DIR
+	local MAIN_DIR
+	local RUN_DIR
+
+	SCRIPTS_DIR=$(readlink -f `dirname "${BASH_SOURCE[0]}"`)
+	MAIN_DIR=$(readlink -f `dirname "${SCRIPTS_DIR}/"`)
+	RUN_DIR=$(readlink -f .)
+
+	if [ "${RUN_DIR}" != "${MAIN_DIR}" ] || ! [[ "${SCRIPTS_DIR}" =~ ^"${MAIN_DIR}"/scripts.* ]]
+	then
+		printf "\n\t%s\n\t%s\n\n" "Script must be run from ${MAIN_DIR}" "You are currently at:   ${RUN_DIR}" 1>&2
+		exit 1
+	fi
+}
+CWD_check
+
+submitJob()
+{
+	local JOB_NAME
+	JOB_NAME="${1}"
+
+	local ASSEMBLY_PREFIX
+	ASSEMBLY_PREFIX="${2}"
+
+	local ASSEMBLY_FASTA
+	ASSEMBLY_FASTA="${3}"
+
+	sbatch \
+		-J ${JOB_NAME} \
+		--time=0-00:30:00 \
+		--ntasks=1 \
+		--nodes=1 \
+		--cpus-per-task=1 \
+		--mem=48G \
+		-o job_files/%x__%j.out \
+		-e job_files/%x__%j.err \
+		${SCRIPTS_DIR}/02-bwaIdx.slurm \
+		"${ASSEMBLY_PREFIX}" \
+		"${ASSEMBLY_FASTA}"
+}
+
+# ###################################### #
+# sanity check on input and output files #
+# ###################################### #
+
+# define key variables
+PROJECT="bft-mapmask"
+ASSEMBLY_FA="data/assembly/asm.fa"
+ASSEMBLY_PFX="${ASSEMBLY_FA%%.fa}"
+INPUT_FILES=("${ASSEMBLY_FA}")
+OUTPUT_FILES=("${ASSEMBLY_PFX}."{amb,ann,bwt,pac,sa})
+
+EXIT_EARLY=0
+
+# check for existence of needed input files
+for INPUT_FILE in "${INPUT_FILES[@]}"
+do
+	if [ ! -e "${INPUT_FILE}" ]
+	then
+		printf "%s\n" "ERROR: Required input file does not exist: ${INPUT_FILE}" 1>&2
+		EXIT_EARLY=1
+	fi
+done
+
+# check for existence of expected output files
+for OUTPUT_FILE in "${OUTPUT_FILES[@]}"
+do
+	if [ -e "${OUTPUT_FILE}" ]
+	then
+		printf "%s\n\t%s\n" "ERROR: Expected output file already exists: ${OUTPUT_FILE}. If you wish to proceed anyway, please remove it:" "rm -f ${OUTPUT_FILE}" 1>&2
+		EXIT_EARLY=1
+	fi
+done
+
+# exit without submitting the job, if needed
+if [ $EXIT_EARLY -ne 0 ]
+then
+	exit ${EXIT_EARLY}
+fi
+
+# ####################### #
+# actually submit the job #
+# ####################### #
+HPC_JOB_NAME="${PROJECT}_bwaIdx"
+submitJob "${HPC_JOB_NAME}" "${ASSEMBLY_PFX}" "${ASSEMBLY_FA}"
+
