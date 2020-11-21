@@ -1,0 +1,181 @@
+#! /bin/bash
+
+# Ensure we're running from the correct location
+CWD_check()
+{
+	#local SCRIPTS_DIR
+	local MAIN_DIR
+	local RUN_DIR
+
+	SCRIPTS_DIR=$(readlink -f `dirname "${BASH_SOURCE[0]}"`)
+	MAIN_DIR=$(readlink -f `dirname "${SCRIPTS_DIR}/"`)
+	RUN_DIR=$(readlink -f .)
+
+	if [ "${RUN_DIR}" != "${MAIN_DIR}" ] || ! [[ "${SCRIPTS_DIR}" =~ ^"${MAIN_DIR}"/scripts.* ]]
+	then
+		printf "\n\t%s\n\t%s\n\n" "Script must be run from ${MAIN_DIR}" "You are currently at:   ${RUN_DIR}" 1>&2
+		exit 1
+	fi
+}
+CWD_check
+
+rangify()
+{
+	local a b FIRST IFS 
+	local -a RANGES
+	local RANGE_END=0
+
+
+	while [ $# -ge 1 ]
+	do
+		a=$((10#${1}))
+		shift
+		b=$((10#${1}))
+
+		if [[ ${a}+1 -eq ${b} ]]
+		then
+			if [ ${RANGE_END} -eq 0 ]
+			then
+				FIRST=${a}
+				RANGE_END=1
+			fi
+		else
+			if [ ${RANGE_END} -eq 1 ]
+			then
+				RANGES+=(${FIRST}-${a})
+			else
+				RANGES+=(${a})
+			fi
+			RANGE_END=0
+		fi
+
+	done
+
+	IFS=','
+	echo "${RANGES[*]}"
+}
+
+submitJob()
+{
+	local ASSEMBLY_PREFIX READS_FASTA_PFX READS_FASTA_SFX SAM_FILE_PFX JOB_NAME ARRAY_JOBS JOBS_AT_ONCE
+	JOB_NAME="${1}"
+	ASSEMBLY_PREFIX="${2}"
+	SAM_FILE_PFX="${3}"
+	READS_FASTA_PFX="${4}"
+	READS_FASTA_SFX="${5}"
+	ARRAY_JOBS="${6}"
+	JOBS_AT_ONCE="${7}"
+
+	sbatch \
+		-J ${JOB_NAME} \
+		--signal=B:USR1@300 \
+		--array=${ARRAY_JOBS}%${JOBS_AT_ONCE} \
+		--time=0-00:15:00 \
+		--ntasks=1 \
+		--nodes=1 \
+		--mem=10G \
+		-o job_files/%x__%A-%a.out \
+		-e job_files/%x__%A-%a.err \
+		${SCRIPTS_DIR}/04-bwaSamse.slurm \
+		"${ASSEMBLY_PREFIX}" \
+		"${SAM_FILE_PFX}" \
+		"${READS_FASTA_PFX}" \
+		"${READS_FASTA_SFX}"
+
+}
+
+# ###################################### #
+# sanity check on input and output files #
+# ###################################### #
+
+# define key variables
+PROJECT="bft-mapmask"
+ASSEMBLY_FA="data/assembly/asm.fa"
+ASSEMBLY_PFX="${ASSEMBLY_FA%%.fa}"
+SAM_PFX="data/alns/split-"
+SAI_PFX="${SAM_PFX}"
+READS_FA_PFX="data/assembly/split-"
+READS_FA_SFX=".fa"
+JOBS_TO_RUN_AT_ONE_TIME=100
+declare -a INPUT_FILES=("${ASSEMBLY_FA}" "${ASSEMBLY_PFX}."{amb,ann,bwt,pac,sa})
+
+EXIT_EARLY=0
+
+# check for existence of needed input files
+for INPUT_FILE in "${INPUT_FILES[@]}"
+do
+	if [ ! -e "${INPUT_FILE}" ]
+	then
+		printf "%s\n" "ERROR: Required input file does not exist: ${INPUT_FILE}" 1>&2
+		EXIT_EARLY=1
+	fi
+done
+unset INPUT_FILES
+
+# exit without submitting the job, if needed
+if [ $EXIT_EARLY -ne 0 ]
+then
+	exit ${EXIT_EARLY}
+fi
+unset EXIT_EARLY
+
+# create output dir (if needed)
+mkdir -p $(dirname "${SAM_PFX}") &> /dev/null
+
+# loop through input files to find output files
+declare -a TO_RUN
+while read READS_FN
+do
+	SPLIT_NUM="${READS_FN#*split-}"
+	SPLIT_NUM="${SPLIT_NUM%.fa}"
+
+	SAI="${SAI_PFX}${SPLIT_NUM}.sai"
+	SAM="${SAM_PFX}${SPLIT_NUM}.sam"
+	SAM_OK="${SAM}.ok"
+
+	if [ ! -e "${SAI}" ]
+	then
+		printf "%s\n" "INFO: ${SAM} cannot be generated because ${SAI} has not yet been created. We will skip it. To proceed, first generate the .sai file." 1>&2
+	fi
+
+	if [ -e "${SAM}" ]
+	then
+		if [ -e "${SAM_OK}" ]
+		then
+			printf "%s\n\t%s\n" "INFO: ${SAM} has already finished. We will skip it. To proceed, first execute:" "rm -f ${SAM} ${SAM_OK}" 1>&2
+		else
+			printf "%s\n" "INFO: ${SAM} already exists, but it hadn't finished. We will delete it and try again." 1>&2
+			rm -f "${SAM}" &> /dev/null
+			TO_RUN+=("${SPLIT_NUM}")
+		fi
+		#printf "%s\n\t%s\n" "INFO: ${SAM} already exists. We will skip it. To proceed, first execute:" "rm -f ${SAM}" 1>&2
+	else
+		TO_RUN+=("${SPLIT_NUM}")
+	fi
+done < <(find "data/assembly" -mindepth 1 -maxdepth 1 -type f -name "`basename ${READS_FA_PFX}`"'*' -printf '%P\n' | sort -V)
+
+# skip job submission if range is empty
+if [ ${#TO_RUN[@]} -eq 0 ]
+then
+	printf "%s\n" "No jobs to run for ${SAM_PFX}"'*.sam' 1>&2
+	exit 0
+fi
+
+# create array submission ranges string
+ARRAY_RANGE=`rangify "${TO_RUN[@]}"`
+unset TO_RUN
+
+# ####################### #
+# actually submit the job #
+# ####################### #
+HPC_JOB_NAME="${PROJECT}_bwaSamse"
+submitJob \
+	"${HPC_JOB_NAME}" \
+	"${ASSEMBLY_PFX}" \
+	"${SAM_PFX}" \
+	"${READS_FA_PFX}" \
+	"${READS_FA_SFX}" \
+	"${ARRAY_RANGE}" \
+	"${JOBS_TO_RUN_AT_ONE_TIME}"
+
+
