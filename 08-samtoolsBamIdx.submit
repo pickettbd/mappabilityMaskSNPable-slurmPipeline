@@ -21,11 +21,9 @@ CWD_check
 
 submitJob()
 {
-	local JOB_NAME OUT_BAM IN_BAMS
+	local JOB_NAME BAM
 	JOB_NAME="${1}"
-	OUT_BAM="${2}"
-	shift 2
-	IN_BAMS=("${@}")
+	BAM="${2}"
 
 	sbatch \
 		-J ${JOB_NAME} \
@@ -33,12 +31,11 @@ submitJob()
 		--ntasks=4 \
 		--nodes=1 \
 		--cpus-per-task=1 \
-		--mem=18G \
+		--mem=8G \
 		-o job_files/%x__%j.out \
 		-e job_files/%x__%j.err \
-		${SCRIPTS_DIR}/07-samtoolsMerge.slurm \
-		"${OUT_BAM}" \
-		"${IN_BAMS[@]}"
+		${SCRIPTS_DIR}/08-samtoolsBamIdx.slurm \
+		"${BAM}"
 }
 
 # ###################################### #
@@ -47,12 +44,10 @@ submitJob()
 
 # define key variables
 PROJECT="bft-mapmask"
-MERGED_BAM="data/alns/alns.bam"
-MERGED_BAI="${MERGED_BAM}.bai"
-SPLIT_BAMS_DIR="data/alns"
-SPLIT_BAMS_PFX="split-"
-INPUT_FILES=(`find "${SPLIT_BAMS_DIR}" -mindepth 1 -maxdepth 1 -type f -name "${SPLIT_BAMS_PFX}"'*.bam' -printf '%p\n' | sort -V | tr '\n' ' '`)
-OUTPUT_FILES=("${MERGED_BAM}" "${MERGED_BAI}")
+BAM="data/alns/alns.bam"
+BAI="${BAM}.bai"
+INPUT_FILES=("${BAM}")
+OUTPUT_FILES=("${BAI}")
 
 EXIT_EARLY=0
 
@@ -85,7 +80,6 @@ fi
 # ####################### #
 # actually submit the job #
 # ####################### #
-HPC_JOB_NAME="${PROJECT}_samtoolsMerge"
-submitJob "${HPC_JOB_NAME}" "${MERGED_BAM}" "${INPUT_FILES[@]}"
+HPC_JOB_NAME="${PROJECT}_samtoolsBamIdx"
+submitJob "${HPC_JOB_NAME}" "${BAM}"
 
-# 39097887. 0-00:10:33. 29% (4/12) CPU. 7% (18/256G) RAM. # bft-mapmask_samtoolsMerge from 72 splits

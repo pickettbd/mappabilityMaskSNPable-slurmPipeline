@@ -87,9 +87,9 @@ time samtools merge \
 	-@ "${SLURM_NTASKS}" \
 	-c -p \
 	-O "BAM" \
-	--write-index \
 	"${OUTPUT_BAM_FILE}" \
 	"${INPUT_BAM_FILES[@]}"
+	# --write-index \ # creates .csi index (instead of .bai)
 
 #	cleanup and exit
 EXIT_CODE=$?
