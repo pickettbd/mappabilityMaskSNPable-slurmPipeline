@@ -120,10 +120,10 @@ OUTPUT_SAI_PFX="${2}"
 READS_FA_PFX="${3}"
 READS_FA_SFX="${4}"
 
-OUTPUT_SAI_DIR=$(readlink -f `dirname "${OUTPUT_SAI}"`)
 OUTPUT_SAI_SFX=".sai"
 
 OUTPUT_SAI="${OUTPUT_SAI_PFX}${SPLIT_NUM}${OUTPUT_SAI_SFX}"
+OUTPUT_SAI_DIR=$(readlink -f `dirname "${OUTPUT_SAI}"`)
 READS_FA="${READS_FA_PFX}${SPLIT_NUM}${READS_FA_SFX}"
 
 # 	check for existence of input file(s)

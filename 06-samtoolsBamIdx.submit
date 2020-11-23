@@ -57,13 +57,11 @@ rangify()
 
 submitJob()
 {
-	local SAM2BAM_SCRIPT SAM_FILE_PFX BAM_FILE_PFX JOB_NAME ARRAY_JOBS JOBS_AT_ONCE
+	local BAM_FILE_PFX JOB_NAME ARRAY_JOBS JOBS_AT_ONCE
 	JOB_NAME="${1}"
-	SAM2BAM_SCRIPT="${2}"
-	SAM_FILE_PFX="${3}"
-	BAM_FILE_PFX="${4}"
-	ARRAY_JOBS="${5}"
-	JOBS_AT_ONCE="${6}"
+	BAM_FILE_PFX="${2}"
+	ARRAY_JOBS="${3}"
+	JOBS_AT_ONCE="${4}"
 
 	sbatch \
 		-J ${JOB_NAME} \
@@ -75,9 +73,7 @@ submitJob()
 		--mem=8G \
 		-o job_files/%x__%A-%a.out \
 		-e job_files/%x__%A-%a.err \
-		${SCRIPTS_DIR}/05-samtoolsBamSort.slurm \
-		"${SAM2BAM_SCRIPT}" \
-		"${SAM_FILE_PFX}" \
+		${SCRIPTS_DIR}/06-samtoolsBamIdx.slurm \
 		"${BAM_FILE_PFX}"
 
 }
@@ -87,10 +83,8 @@ submitJob()
 # ###################################### #
 
 # define key variables
-SAM2BAM_SCRIPT="${SCRIPTS_DIR}/sam2Bam.sh"
 PROJECT="bft-mapmask"
-SAM_PFX="data/alns/split-"
-BAM_PFX="${SAM_PFX}"
+BAM_PFX="data/alns/split-"
 JOBS_TO_RUN_AT_ONE_TIME=40
 
 # create output dir (if needed)
@@ -98,39 +92,39 @@ mkdir -p $(dirname "${BAM_PFX}") &> /dev/null
 
 # loop through input files to find output files
 declare -a TO_RUN
-while read SAM_FN
+while read BAM_FN
 do
-	SPLIT_NUM="${SAM_FN#*split-}"
-	#SPLIT_NUM="${SPLIT_NUM%.sam}"
+	SPLIT_NUM="${BAM_FN#*split-}"
+	#SPLIT_NUM="${SPLIT_NUM%.bam}"
 
-	SAM="${SAM_PFX}${SPLIT_NUM}.sam"
 	BAM="${BAM_PFX}${SPLIT_NUM}.bam"
-	BAM_OK="${BAM}.ok"
+	BAI="${BAM}.bai"
+	BAI_OK="${BAI}.ok"
 
-	if [ ! -e "${SAM}" ]
+	if [ ! -e "${BAM}" ]
 	then
-		printf "%s\n" "INFO: ${BAM} cannot be generated because ${SAM} has not yet been created. We will skip it. To proceed, first generate the .sam file." 1>&2
+		printf "%s\n" "INFO: ${BAI} cannot be generated because ${BAM} has not yet been created. We will skip it. To proceed, first generate the .bam file." 1>&2
 	fi
 
-	if [ -e "${BAM}" ]
+	if [ -e "${BAI}" ]
 	then
-		if [ -e "${BAM_OK}" ]
+		if [ -e "${BAI_OK}" ]
 		then
-			printf "%s\n\t%s\n" "INFO: ${BAM} has already finished. We will skip it. To proceed, first execute:" "rm -f ${BAM} ${BAM_OK}" 1>&2
+			printf "%s\n\t%s\n" "INFO: ${BAI} has already finished. We will skip it. To proceed, first execute:" "rm -f ${BAI} ${BAI_OK}" 1>&2
 		else
-			printf "%s\n" "INFO: ${BAM} already exists, but it hadn't finished. We will delete it and try again." 1>&2
-			rm -f "${BAM}" &> /dev/null
+			printf "%s\n" "INFO: ${BAI} already exists, but it hadn't finished. We will delete it and try again." 1>&2
+			rm -f "${BAI}" &> /dev/null
 			TO_RUN+=("${SPLIT_NUM}")
 		fi
 	else
 		TO_RUN+=("${SPLIT_NUM}")
 	fi
-done < <(find "data/alns" -mindepth 1 -maxdepth 1 -type f -name "`basename ${SAM_PFX}`"'*' -printf '%P\n' | sed -r 's,([0-9]+)\..+,\1,' | sort -Vu)
+done < <(find "data/alns" -mindepth 1 -maxdepth 1 -type f -name "`basename ${BAM_PFX}`"'*' -printf '%P\n' | sed -r 's,([0-9]+)\..+,\1,' | sort -Vu)
 
 # skip job submission if range is empty
 if [ ${#TO_RUN[@]} -eq 0 ]
 then
-	printf "%s\n" "No jobs to run for ${BAM_PFX}"'*.sam' 1>&2
+	printf "%s\n" "No jobs to run for ${BAM_PFX}"'*.bam' 1>&2
 	exit 0
 fi
 
@@ -141,11 +135,9 @@ unset TO_RUN
 # ####################### #
 # actually submit the job #
 # ####################### #
-HPC_JOB_NAME="${PROJECT}_samtoolsSam2BamSort"
+HPC_JOB_NAME="${PROJECT}_samtoolsBamIdx"
 submitJob \
 	"${HPC_JOB_NAME}" \
-	"${SAM2BAM_SCRIPT}" \
-	"${SAM_PFX}" \
 	"${BAM_PFX}" \
 	"${ARRAY_RANGE}" \
 	"${JOBS_TO_RUN_AT_ONE_TIME}"

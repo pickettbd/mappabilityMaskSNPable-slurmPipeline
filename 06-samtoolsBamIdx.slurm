@@ -85,10 +85,10 @@ moveTempFilesBackToNetworkStorage()
 {
 	if [ -n $WORK_DIR ] && [ -e $WORK_DIR ] && [ -d $WORK_DIR ]
 	then
-		time rsync -utpv "${TMP_OUT_SAM}" "${OUTPUT_SAM}" 1>&2
+		time rsync -utpv "${TMP_OUTPUT_BAI}" "${OUTPUT_BAI}" 1>&2
 		if [ $? -eq 0 ]
 		then
-			touch "${OUTPUT_SAM}.ok"
+			touch "${OUTPUT_BAI}.ok"
 		fi
 	fi
 }
@@ -109,48 +109,43 @@ trap outOfTime USR1
 
 # 	load modules
 module purge
-module load bwa/0.7.17_2019.07.09
+module load samtools/1.10
 
 #	setup variables for the job
 #SPLIT_NUM=`printf "%02u" "${SLURM_ARRAY_TASK_ID}"`
 SPLIT_NUM="${SLURM_ARRAY_TASK_ID}"
 
-ASSEMBLY_PFX="${1}"
-OUTPUT_SAM_PFX="${2}"
-READS_FA_PFX="${3}"
-READS_FA_SFX="${4}"
+INPUT_BAM_PFX="${1}"
 
-OUTPUT_SAM_SFX=".sam"
+INPUT_BAM_SFX=".bam"
+INPUT_BAM="${INPUT_BAM_PFX}${SPLIT_NUM}${INPUT_BAM_SFX}"
 
-OUTPUT_SAM="${OUTPUT_SAM_PFX}${SPLIT_NUM}${OUTPUT_SAM_SFX}"
-OUTPUT_SAM_DIR=$(readlink -f `dirname "${OUTPUT_SAM}"`)
-SAI="${OUTPUT_SAM%%.sam}.sai"
-READS_FA="${READS_FA_PFX}${SPLIT_NUM}${READS_FA_SFX}"
+OUTPUT_BAI_SFX=".bai"
+OUTPUT_BAI="${INPUT_BAM}${OUTPUT_BAI_SFX}"
+OUTPUT_BAI_DIR=$(readlink -f `dirname "${OUTPUT_BAI}"`)
 
 # 	check for existence of input file(s)
-#		We assume bwa is capable of recognizing whether the index it
+#		We assume samtools is capable of recognizing whether the index it
 #		requires exists. We assume the same for the input fa file.
 
 # 	check for existence of expected output file(s)
-if [ -e "${OUTPUT_SAM}" ]
+if [ -e "${OUTPUT_BAI}" ]
 then
-	printf "%s\n" "INFO: ${OUTPUT_SAM} already exists! We assume this means we can quit this process without running the intended command. Bye!" 1>&2
+	printf "%s\n" "INFO: ${OUTPUT_BAI} already exists! We assume this means we can quit this process without running the intended command. Bye!" 1>&2
 	cleanup
 	exit 0
 fi
 
 #	create output directory, if needed
-mkdir -p "${OUTPUT_SAM_DIR}" &> /dev/null
+mkdir -p "${OUTPUT_BAI_DIR}" &> /dev/null
 
 #		create /tmp output directory and copy existing files
 WORK_DIR="/tmp/${SLURM_ARRAY_JOB_ID}-${SPLIT_NUM}"
 mkdir -p "${WORK_DIR}" &> /dev/null
 #			files
-TMP_ASM_PFX="${WORK_DIR}/`basename ${ASSEMBLY_PFX}`"
-TMP_OUT_SAM="${WORK_DIR}/`basename ${OUTPUT_SAM}`"
-TMP_SAI="${TMP_OUT_SAM%%.sam}.sai"
-TMP_READS_FA="${WORK_DIR}/`basename ${READS_FA}`"
-time rsync -uLtpv "${ASSEMBLY_PFX}"* "${READS_FA}" "${SAI}" "${WORK_DIR}"/ 1>&2
+TMP_INPUT_BAM="${WORK_DIR}/`basename ${INPUT_BAM}`"
+TMP_OUTPUT_BAI="${WORK_DIR}/`basename ${OUTPUT_BAI}`"
+time rsync -uLtpv "${INPUT_BAM}" "${WORK_DIR}"/ 1>&2
 
 # write tmp info for later cleanup, if needed
 #	get the lock
@@ -159,12 +154,12 @@ printf "%s\t%s\n" "${SLURM_JOB_NODELIST}" "${SLURM_ARRAY_JOB_ID}-${SLURM_ARRAY_T
 dotlockfile -u "${SLURM_SUBMIT_DIR}/.cleanup.tsv.lock"
 
 #	run the program of interest
-echo bwa samse -f "${TMP_OUT_SAM}" "${TMP_ASM_PFX}" "${TMP_SAI}" "${TMP_READS_FA}" 1>&2
-time bwa samse \
-	-f "${TMP_OUT_SAM}" \
-	"${TMP_ASM_PFX}" \
-	"${TMP_SAI}" \
-	"${TMP_READS_FA}" &
+echo samtools index -b -@ ${SLURM_NTASKS:-1} "${TMP_INPUT_BAM}" "${TMP_OUTPUT_BAI}" 1>&2
+time samtools index \
+	-b \
+	-@ "${SLURM_NTASKS:-1}" \
+	"${TMP_INPUT_BAM}" \
+	"${TMP_OUTPUT_BAI}" &
 
 wait `jobs -p`
 EXIT_CODE=$?
@@ -174,14 +169,18 @@ moveTempFilesBackToNetworkStorage
 #	cleanup and exit
 if [ ${EXIT_CODE} -eq 0 ]
 then
-	chmod 444 "${OUTPUT_SAM}" &> /dev/null
+	chmod 444 "${OUTPUT_BAI}" &> /dev/null
 	cleanup "success"
 else
-	rm -f "${OUTPUT_SAM}" &> /dev/null
+	rm -f "${OUTPUT_BAI}" &> /dev/null
 	cleanup "failed"
 fi
 
 exit ${EXIT_CODE}
 
-# Usage: bwa samse [-n max_occ] [-f out.sam] [-r RG_line] <prefix> <in.sai> <in.fq>
-
+#Usage: samtools index [-bc] [-m INT] <in.bam> [out.index]
+#Options:
+#  -b       Generate BAI-format index for BAM files [default]
+#  -c       Generate CSI-format index for BAM files
+#  -m INT   Set minimum interval size for CSI indices to 2^INT [14]
+#  -@ INT   Sets the number of threads [none]

@@ -121,9 +121,9 @@ OUTPUT_BAM_PFX="${3}"
 INPUT_SAM_SFX=".sam"
 INPUT_SAM="${INPUT_SAM_PFX}${SPLIT_NUM}${INPUT_SAM_SFX}"
 
-OUTPUT_BAM_DIR=$(readlink -f `dirname "${OUTPUT_BAM}"`)
 OUTPUT_BAM_SFX=".bam"
 OUTPUT_BAM="${OUTPUT_BAM_PFX}${SPLIT_NUM}${OUTPUT_BAM_SFX}"
+OUTPUT_BAM_DIR=$(readlink -f `dirname "${OUTPUT_BAM}"`)
 
 # 	check for existence of input file(s)
 #		We assume samtools is capable of recognizing whether the index it
