@@ -21,23 +21,23 @@ CWD_check
 
 submitJob()
 {
-	local JOB_NAME BAM RAW_MASK
+	local JOB_NAME RAW_MASK MASK
 	JOB_NAME="${1}"
-	BAM="${2}"
-	RAW_MASK="${3}"
+	RAW_MASK="${2}"
+	MASK="${3}"
 
 	sbatch \
 		-J ${JOB_NAME} \
 		--time=0-01:00:00 \
-		--ntasks=4 \
+		--ntasks=1 \
 		--nodes=1 \
 		--cpus-per-task=1 \
 		--mem=8G \
 		-o job_files/%x__%j.out \
 		-e job_files/%x__%j.err \
-		${SCRIPTS_DIR}/09-snpableRawMask.slurm \
-		"${BAM}" \
-		"${RAW_MASK}"
+		${SCRIPTS_DIR}/06-snpableMask.slurm \
+		"${RAW_MASK}" \
+		"${MASK}"
 }
 
 # ###################################### #
@@ -46,10 +46,10 @@ submitJob()
 
 # define key variables
 PROJECT="bft-mapmask"
-BAM="data/alns/alns.bam"
 RAW_MASK="data/alns/rawMask_35.fa"
-INPUT_FILES=("${BAM}")
-OUTPUT_FILES=("${RAW_MASK}")
+MASK="data/alns/mask_35_50.fa"
+INPUT_FILES=("${RAW_MASK}")
+OUTPUT_FILES=("${MASK}")
 
 EXIT_EARLY=0
 
@@ -82,6 +82,6 @@ fi
 # ####################### #
 # actually submit the job #
 # ####################### #
-HPC_JOB_NAME="${PROJECT}_snpableRawMask"
-submitJob "${HPC_JOB_NAME}" "${BAM}" "${RAW_MASK}"
+HPC_JOB_NAME="${PROJECT}_snpableMask"
+submitJob "${HPC_JOB_NAME}" "${RAW_MASK}" "${MASK}"
 

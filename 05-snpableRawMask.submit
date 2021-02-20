@@ -21,9 +21,11 @@ CWD_check
 
 submitJob()
 {
-	local JOB_NAME BAM
+	local JOB_NAME SAMS RAW_MASK
 	JOB_NAME="${1}"
-	BAM="${2}"
+	RAW_MASK="${2}"
+	shift 2
+	SAMS=("${@}")
 
 	sbatch \
 		-J ${JOB_NAME} \
@@ -34,8 +36,9 @@ submitJob()
 		--mem=8G \
 		-o job_files/%x__%j.out \
 		-e job_files/%x__%j.err \
-		${SCRIPTS_DIR}/08-samtoolsBamIdx.slurm \
-		"${BAM}"
+		${SCRIPTS_DIR}/05-snpableRawMask.slurm \
+		"${RAW_MASK}" \
+		"${SAMS[@]}"
 }
 
 # ###################################### #
@@ -44,22 +47,15 @@ submitJob()
 
 # define key variables
 PROJECT="bft-mapmask"
-BAM="data/alns/alns.bam"
-BAI="${BAM}.bai"
-INPUT_FILES=("${BAM}")
-OUTPUT_FILES=("${BAI}")
+RAW_MASK="data/alns/rawMask_35.fa"
+INPUT_FILES=(`find "data/alns" -mindepth 1 -maxdepth 1 -type f -name 'split-*.sam' | sort -V | tr '\n' ' '`)
+OUTPUT_FILES=("${RAW_MASK}")
 
 EXIT_EARLY=0
 
 # check for existence of needed input files
-for INPUT_FILE in "${INPUT_FILES[@]}"
-do
-	if [ ! -e "${INPUT_FILE}" ]
-	then
-		printf "%s\n" "ERROR: Required input file does not exist: ${INPUT_FILE}" 1>&2
-		EXIT_EARLY=1
-	fi
-done
+# 	Not necessary because input files were found with find
+#	Just be sure the previous step is finished correctly before running this script
 
 # check for existence of expected output files
 for OUTPUT_FILE in "${OUTPUT_FILES[@]}"
@@ -80,6 +76,6 @@ fi
 # ####################### #
 # actually submit the job #
 # ####################### #
-HPC_JOB_NAME="${PROJECT}_samtoolsBamIdx"
-submitJob "${HPC_JOB_NAME}" "${BAM}"
+HPC_JOB_NAME="${PROJECT}_snpableRawMask"
+submitJob "${HPC_JOB_NAME}" "${RAW_MASK}" "${INPUT_FILES[@]}"
 

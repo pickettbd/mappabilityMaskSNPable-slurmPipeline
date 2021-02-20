@@ -64,51 +64,48 @@ trap control_c SIGHUP SIGINT SIGTERM SIGQUIT
 # 	load modules
 module purge
 module load samtools/1.10
+module load snpable/20091110
 
 #	setup variables for the job
-INPUT_BAM="${1}"
-OUTPUT_BAI="${INPUT_BAM}.bai"
-OUTPUT_BAI_DIR=$(readlink -f `dirname "${OUTPUT_BAI}"`)
+RAW_MASK_FILE="${1}"
+shift
+INPUT_SAMS=("${@}")
+OUTPUT_DIR=$(readlink -f `dirname "${RAW_MASK_FILE}"`)
 
 # 	check for existence of input file(s)
-#		We assume samtools is capable of recognizing whether the index it
-#		requires exists. We assume the same for the input fa file.
+#		We assume samtools/snpable are capable of recognizing whether the
+#		files they require exist.
 
 # 	check for existence of expected output file(s)
-if [ -e "${OUTPUT_BAI}" ]
+if [ -e "${RAW_MASK_FILE}" ]
 then
-	printf "%s\n" "INFO: ${OUTPUT_BAI} already exists! We assume this means we can quit this process without running the intended command. Bye!" 1>&2
+	printf "%s\n" "INFO: ${RAW_MASK_FILE} already exists! We assume this means we can quit this process without running the intended command. Bye!" 1>&2
 	cleanup
 	exit 0
 fi
 
 #	create output directory, if needed
-mkdir -p "${OUTPUT_BAI_DIR}" &> /dev/null
+mkdir -p "${OUTPUT_DIR}" &> /dev/null
 
 #	run the program of interest
-time samtools index \
-	-b \
-	-@ "${SLURM_NTASKS:-1}" \
-	"${INPUT_BAM}" \
-	"${OUTPUT_BAI}"
+time cat "${INPUT_SAMS[@]}" \
+	| gen_raw_mask.pl \
+	> "${RAW_MASK_FILE}"
+
 
 EXIT_CODE=$?
 
 #	cleanup and exit
 if [ ${EXIT_CODE} -eq 0 ]
 then
-	chmod 444 "${OUTPUT_BAI}" &> /dev/null
+	chmod 444 "${RAW_MASK_FILE}" &> /dev/null
 else
-	rm -f "${OUTPUT_BAI}" &> /dev/null
+	rm -f "${RAW_MASK_FILE}" &> /dev/null
 fi
 
 cleanup
 
 exit ${EXIT_CODE}
 
-#Usage: samtools index [-bc] [-m INT] <in.bam> [out.index]
-#Options:
-#  -b       Generate BAI-format index for BAM files [default]
-#  -c       Generate CSI-format index for BAM files
-#  -m INT   Set minimum interval size for CSI indices to 2^INT [14]
-#  -@ INT   Sets the number of threads [none]
+# Usage: gen_raw_mask.pl <bwa.sam>
+

@@ -68,7 +68,7 @@ submitJob()
 
 	sbatch \
 		-J ${JOB_NAME} \
-		--signal=B:USR1@300 \
+		--signal=B:USR1@60 \
 		--array=${ARRAY_JOBS}%${JOBS_AT_ONCE} \
 		--time=0-00:15:00 \
 		--ntasks=1 \
