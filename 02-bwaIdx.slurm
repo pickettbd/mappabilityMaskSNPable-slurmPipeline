@@ -64,7 +64,7 @@ trap control_c SIGHUP SIGINT SIGTERM SIGQUIT
 
 # 	load modules
 module purge
-module load bwa/0.7.17_2019.07.09
+module load bwa/0.7.17_20200702
 
 #	setup variables for the job
 ASSEMBLY_PFX="${1}"

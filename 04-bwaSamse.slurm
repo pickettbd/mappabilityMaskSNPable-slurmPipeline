@@ -109,7 +109,7 @@ trap outOfTime USR1
 
 # 	load modules
 module purge
-module load bwa/0.7.17_2019.07.09
+module load bwa/0.7.17_20200702
 
 #	setup variables for the job
 #SPLIT_NUM=`printf "%02u" "${SLURM_ARRAY_TASK_ID}"`
